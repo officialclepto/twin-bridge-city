@@ -31,7 +31,7 @@
 <div id="rotate">TURN YOUR PHONE SIDEWAYS ⟲</div>
 <div id="pad">
   <div class="b dir" data-k="left">◀</div><div class="b dir" data-k="right">▶</div>
-  <div class="b dir" data-k="up">▲</div><div class="b dir" data-k="down">BLOCK</div>
+  <div class="b dir" data-k="up">▲</div><div class="b dir" data-k="down">DUCK</div>
   <div class="b atk" data-k="punch">PUNCH</div><div class="b atk" data-k="kick">KICK</div>
   <div class="b atk" data-k="special">SPECIAL</div>
 </div>
@@ -132,7 +132,7 @@ window.addEventListener('resize', resize);
 
 // ---------- Sound (synth, no files) ----------
 let AC = null;
-function audio() { if (!AC) { try { AC = new (window.AudioContext || window.webkitAudioContext)(); initBuses(); } catch (e) {} } if (AC && AC.state === 'suspended') AC.resume(); return AC; }
+function audio() { if (!AC) { try { AC = new (window.AudioContext || window.webkitAudioContext)(); initBuses(); loadCustomAudio(); } catch (e) {} } if (AC && AC.state === 'suspended') AC.resume(); return AC; }
 function noise(dur, freq, vol = 0.4, type = 'lowpass') {
   const a = AC; if (!a) return;
   const len = Math.floor(a.sampleRate * dur), buf = a.createBuffer(1, len, a.sampleRate), d = buf.getChannelData(0);
@@ -243,8 +243,8 @@ class Fighter {
   get hw() { return this.m.w * SPRITE_SCALE * 0.3; }
   get height() { return this.m.h * SPRITE_SCALE; }
   onGround() { return this.y >= GROUND - 0.1; }
-  canAct() { return ['idle', 'walk', 'block', 'jump'].includes(this.state); }
-  setState(s) { if (s !== 'punch' && s !== 'kick') this.air = false; this.state = s; this.t = 0; this.hit2 = false; this.armorUsed = false; this.hasHit = false; this.chopHits = 0; }
+  canAct() { return ['idle', 'walk', 'block', 'duck', 'jump'].includes(this.state); }
+  setState(s) { if (s !== 'punch' && s !== 'kick') this.air = false; this.state = s; this.t = 0; this.hit2 = false; this.armorUsed = false; this.duckTold = false; this.hasHit = false; this.chopHits = 0; }
 
   // sprite-space point -> world
   world(px, py) {
@@ -384,8 +384,13 @@ const STAGE_TRACKS = ['street', 'drill', 'hype'];
 // ---------- Sequencer ----------
 const MUS = { want: null, cur: null, step: 0, next: 0, prevBass: null };
 function playMusic(name) {
-  if (MUS.want === name) return;
-  MUS.want = name; startTrack(name);
+  const ck = typeof customMusicKey === 'function' ? customMusicKey(name) : null;
+  if (MUS.want === name && MUS.ck === ck) return;
+  MUS.want = name; MUS.ck = ck; stopCustomMusic();
+  if (ck && AC && MUSBUS) { // your own song for this screen
+    MUS.cur = null; const src = AC.createBufferSource(), g = AC.createGain(); g.gain.value = 1.6;
+    src.buffer = CUSTOM[ck]; src.loop = ck !== 'music_victory' && ck !== 'music_lose'; src.connect(g); g.connect(MUSBUS); src.start(); customSrc = src;
+  } else startTrack(name);
 }
 function startTrack(name) { MUS.cur = name; MUS.step = 0; MUS.prevBass = null; if (AC) MUS.next = AC.currentTime + 0.06; }
 function degFreq(T, ch, oct, semi = 0) {
@@ -445,6 +450,47 @@ function say(text, opt = {}) {
     const u = new SpeechSynthesisUtterance(text); annVoice = annVoice || pickVoice(); if (annVoice) u.voice = annVoice;
     u.pitch = opt.pitch || 0.55; u.rate = opt.rate || 0.92; u.volume = 1; speechSynthesis.speak(u);
   } catch (e) {}
+}
+
+
+// ---------- Your own audio: voice-over clips and music ----------
+// Files in assets/vo/ (vo_<line>.mp3) and assets/music/ (music_<slot>.mp3) replace the built-in voice and beats.
+// Anything missing falls back to the built-in sound automatically, so clips can be added a few at a time.
+const CUSTOM = {}; let customLoaded = false, customSrc = null, VOBUS = null;
+function loadCustomAudio() {
+  if (customLoaded || !AC || typeof ASSET_LIST === 'undefined') return; customLoaded = true;
+  VOBUS = AC.createGain(); VOBUS.gain.value = 1.0; VOBUS.connect(MASTER);
+  for (const p of ASSET_LIST) {
+    const m = p.match(/^assets\/(?:vo|music)\/((?:vo|music)_[a-z0-9_]+)\.(?:mp3|m4a|ogg|wav)$/i); if (!m) continue;
+    fetch(p).then(r => r.arrayBuffer()).then(b => new Promise((ok, no) => AC.decodeAudioData(b, ok, no))).then(buf => {
+      CUSTOM[m[1].toLowerCase()] = buf;
+      if (m[1].startsWith('music') && MUS.want) { const w = MUS.want; MUS.want = null; playMusic(w); }
+    }).catch(() => {});
+  }
+}
+function customMusicKey(name) {
+  if ((scene === 'fight' || scene === 'vs') && !(arc && arc.final) && CUSTOM['music_stage_' + stage.id]) return 'music_stage_' + stage.id;
+  const k = { street: 'music_stage1', drill: 'music_stage2', hype: 'music_stage3' }[name] || 'music_' + name;
+  return CUSTOM[k] ? k : null;
+}
+function stopCustomMusic() { if (customSrc) { try { customSrc.stop(); } catch (e) {} customSrc = null; } }
+const VO_TEXT = { title: 'Twin Bridge City. Street Legends!', choose: 'Choose your fighter', versus: 'versus', round1: 'Round one', round2: 'Round two', final_round: 'Final round',
+  fight: 'Fight!', ko: 'K.O.!', perfect: 'Perfect!', time: 'Time!', draw: 'Draw game', wins: 'wins!', continue: 'Continue?', game_over: 'Game over',
+  next_challenger: 'Next challenger.', final_battle: 'Final battle.', champion: 'Congratulations. The city is yours.', nice_combo: 'Nice combo!', awesome: 'Awesome!',
+  unbelievable: 'Unbelievable!', finish_em: "Finish 'em!", legendary: 'Legendary!' };
+let voEnd = 0, voSrcs = [];
+function vo(keys, opt = {}) { // play your recorded clips if you have them all, otherwise the device voice says it
+  if (!SET.voice) return;
+  if (AC && VOBUS && keys.every(k => CUSTOM['vo_' + k])) {
+    if (!opt.queue) { voSrcs.forEach(x => { try { x.stop(); } catch (e) {} }); voSrcs = []; voEnd = 0; }
+    if (window.speechSynthesis) try { speechSynthesis.cancel(); } catch (e) {}
+    let t = Math.max(AC.currentTime + 0.02, opt.queue ? voEnd : 0);
+    for (const k of keys) { const b = CUSTOM['vo_' + k], x = AC.createBufferSource(); x.buffer = b; x.connect(VOBUS); x.start(t); voSrcs.push(x); t += b.duration + 0.06; }
+    voEnd = t; return;
+  }
+  if (opt.clipOnly) return;
+  const text = keys.map(k => VO_TEXT[k] != null ? VO_TEXT[k] : k.startsWith('name_') ? SAY_NAME[k.slice(5)] : k.startsWith('fin_') ? (STYLE[k.slice(4)] || {}).finName || '' : '').join(' ');
+  if (text.trim()) say(text, opt);
 }
 
 // ---------- On-screen sound toggles ----------
@@ -529,7 +575,7 @@ function drawStageSelect() {
 }
 function startMatch(a, b, keepStage) {
   if (!keepStage) stage = STAGES[Math.floor(Math.random() * STAGES.length)];
-  say(SAY_NAME[a] + '. Versus. ' + SAY_NAME[b], { rate: 1 });
+  vo(['name_' + a, 'versus', 'name_' + b], { rate: 1 });
   P = [new Fighter(a, 0, false), new Fighter(b, 1, mode === 1)];
   round = 1; scene = 'vs'; phaseT = 0;
 }
@@ -552,9 +598,13 @@ function comboText(att, n) {
   const c = n >= 6 ? '#ff3bd4' : n >= 4 ? '#ff8a1f' : '#ffe14a';
   texts = texts.filter(t => !t.combo || t.owner !== att);
   const t = { txt: n + ' HIT COMBO!', x: att.side === 0 ? 230 : W - 230, y: 200, color: c, size: 34 + Math.min(n, 8) * 3, life: 70, max: 70, combo: true, owner: att };
-  texts.push(t); if (n === 3 || n === 5 || n === 8) say(n >= 8 ? 'Unbelievable!' : n >= 5 ? 'Awesome!' : 'Nice combo!', { queue: false });
+  texts.push(t); if (n === 3 || n === 5 || n === 8) vo([n >= 8 ? 'unbelievable' : n >= 5 ? 'awesome' : 'nice_combo'], { queue: false });
 }
-function hurtRect(f) { return { x0: f.x - f.hw, x1: f.x + f.hw, y0: f.y - f.height * 0.98, y1: f.y }; }
+function hurtRect(f) { return { x0: f.x - f.hw, x1: f.x + f.hw, y0: f.y - f.height * (f.state === 'duck' ? 0.5 : 0.98), y1: f.y }; } // ducking: punches go over your head
+function threatened(f, opp) { // is something coming at me? (holding away from the opponent blocks it)
+  if (['punch', 'kick', 'special', 'power', 'charge'].includes(opp.state) && Math.abs(opp.x - f.x) < 420) return true;
+  return projectiles.some(p => p.owner === opp && Math.abs(p.x - f.x) < 380);
+}
 function circleHits(pt, r, f) { const R = hurtRect(f); const cx = clamp(pt.x, R.x0, R.x1), cy = clamp(pt.y, R.y0, R.y1); return (pt.x - cx) ** 2 + (pt.y - cy) ** 2 < r * r; }
 
 // test the whole limb (shoulder to fist / hip to foot) so fast swings never pass through
@@ -574,18 +624,21 @@ function limbHits(f, limb, r, opp) {
   return null;
 }
 function attackHits(f, opp) {
+  if (opp.state === 'duck' && f.state === 'punch' && (f.atk === 'punch') && !f.air) { // standing punches sail over a ducking opponent
+    if (!f.duckTold && Math.abs(opp.x - f.x) < 260) { f.duckTold = true; popText('DUCKED!', opp.x, opp.y - opp.height * 0.6, '#7ff6ff', 30, 40); } return null; }
   const limb = f.state === 'punch' ? 'front' : 'leg';
   let pt = limbHits(f, limb, f.air ? 36 : 30, opp);
   if (pt || !f.fr) return pt;
   const h = f.handPoint();
-  const extra = f.atk === 'upper' ? [[0, -60], [0, -120], [-f.dir * 20, -170]] : f.atk === 'akick' ? [[0, 50], [-f.dir * 30, 100], [f.dir * 10, 140]] : f.atk === 'apunch' ? [[0, 40], [0, 80]] : [];
+  const extra = (f.atk === 'kick' || f.atk === 'lunge') ? [[0, 60], [-f.dir * 20, 110]] : f.atk === 'upper' ? [[0, -60], [0, -120], [-f.dir * 20, -170]] : f.atk === 'akick' ? [[0, 50], [-f.dir * 30, 100], [f.dir * 10, 140]] : f.atk === 'apunch' ? [[0, 40], [0, 80]] : [];
   for (const [dx, dy] of extra) { const q = { x: h.x + dx, y: h.y + dy }; if (circleHits(q, 34, opp)) return q; }
   return null;
 }
 function applyHit(att, def, dmg, opt = {}) {
   if (phase === 'finisher') return;
   if (phase === 'finish' && fin && def === fin.l) { const at = opt.at || { x: def.x, y: def.y - 200 }; spark(at.x, at.y, '#fff6a0', 20, 12); SFX.heavy(); doKO(def, att); return; }
-  const blocking = def.state === 'block' && def.onGround() && !opt.unblockable && def.blind <= 0 && Math.sign(att.x - def.x) === def.dir;
+  const facing = Math.sign(att.x - def.x) === def.dir;
+  const blocking = def.onGround() && !opt.unblockable && def.blind <= 0 && facing && (def.state === 'block' || (def.state === 'duck' && !att.air)); // ducking also guards low against kicks
   const at = opt.at || { x: (att.x + def.x) / 2, y: def.y - def.height * 0.6 };
   if (blocking) {
     def.hp -= dmg * 0.12; def.vx = att.dir * 4; def.stun = 10; def.t = 0;
@@ -622,7 +675,7 @@ function doKO(loser, winner) {
   SFX.ko(); shake = 20; hitstop = 14; flashT = 10; slowmo = 75; camKick = 95; camFocus = loser;
   phase = 'ko'; phaseT = 0; winner.wins++;
   winnerText = winner.c.name + ' WINS';
-  const perfect = winner.hp >= winner.maxHp; say('K.O.!', { rate: 0.8 }); if (perfect) { say('Perfect!', { queue: true }); popText('PERFECT!', W / 2, 260, '#ffcf2e', 70, 120); if (arc && winner === P[0]) arc.perfect++; }
+  const perfect = winner.hp >= winner.maxHp; vo(['ko'], { rate: 0.8 }); if (perfect) { vo(['perfect'], { queue: true }); popText('PERFECT!', W / 2, 260, '#ffcf2e', 70, 120); if (arc && winner === P[0]) arc.perfect++; }
 }
 
 function startSpecial(f, opp) {
@@ -684,7 +737,9 @@ function updateFighter(f, opp, inp) {
       } else { const h = inp.left ? -1 : inp.right ? 1 : 0; if (h) f.vx = clamp(f.vx + h * 0.35, -spd * 1.6, spd * 1.6); } // air steering
     }
     else if (f.onGround()) {
-      if (inp.down && f.blind <= 0) { if (f.state !== 'block') f.setState('block'); f.vx = 0; }
+      const away = (inp.left && f.dir > 0) || (inp.right && f.dir < 0);
+      if (inp.down) { if (f.state !== 'duck') f.setState('duck'); f.vx = 0; }
+      else if (away && f.blind <= 0 && threatened(f, opp)) { if (f.state !== 'block') f.setState('block'); f.vx = 0; }
       else if (pressed('up') || (inp.up && f.state !== 'jump' && f.land <= 0 && f.t > 6)) { f.vy = -21; f.y -= 1; f.jumps = 1; f.vx = (inp.left ? -1 : inp.right ? 1 : 0) * spd * 1.45; f.setState('jump'); puff(f.x, f.y, 3, 18, 0); }
       else if (inp.left || inp.right) { f.vx = (inp.right ? 1 : -1) * spd * ((inp.right ? 1 : -1) === f.dir ? 1 : 0.8); if (f.state !== 'walk') f.setState('walk'); }
       else { f.vx *= 0.5; if (f.state !== 'idle') f.setState('idle'); }
@@ -715,6 +770,10 @@ function updateFighter(f, opp, inp) {
     if (f.onGround()) f.vx *= 0.85;
     if (--f.stun <= 0 && f.onGround()) { f.setState('idle'); f.comboN = 0; }
   } else if (f.state === 'block') {
+    if (f.stun > 0) { f.stun--; f.vx *= 0.8; }
+    const away = (inp.left && f.dir > 0) || (inp.right && f.dir < 0);
+    if ((!away || !threatened(f, opp)) && f.stun <= 0 && f.t > 8) f.setState('idle');
+  } else if (f.state === 'duck') {
     if (f.stun > 0) { f.stun--; f.vx *= 0.8; }
     if (!inp.down && f.stun <= 0) f.setState('idle');
   } else if (f.state === 'jump') {
@@ -1015,7 +1074,7 @@ function cpuInput(f, opp) {
     const spRange = { smash: 230, axe: 200, smoke: 900, steal: 260, teleport: 900, combo: 210, cash: 900, umbrella: 900, lid: 240, moneybag: 230, alien: 900, petals: 900, grenade: 650, dbluppercut: 230, laugh: 900, fireball: 900 }[sp];
     if (ready && dist < spRange && Math.random() < lerp(0.25, 0.85, L)) ai.act = 'special';
     else if (dist < 240 && !oppAttacking && edge('punch') && Math.random() < lerp(0.04, 0.13, L)) { ai.hold = 34 + f.A.punch.start + f.A.punch.active + f.A.punch.rec; ai.t = 2; inp.punch = true; return inp; }
-    else if (oppAttacking && dist < 230 && Math.random() < lerp(0.2, 0.8, L)) { ai.act = 'down'; ai.t = 18; }
+    else if (oppAttacking && dist < 230 && Math.random() < lerp(0.2, 0.8, L)) { ai.act = opp.state === 'punch' && opp.onGround() && opp.atk === 'punch' && Math.random() < 0.6 ? 'down' : away; ai.t = 18; }
     else if (dist < 150) ai.act = Math.random() < lerp(0.3, 0.6, L) ? 'punch' : Math.random() < 0.7 ? 'kick' : away;
     else if (dist < 220) ai.act = Math.random() < 0.3 ? 'lunge' : Math.random() < 0.4 ? 'kick' : toward;
     else if (dist < 430 && Math.random() < lerp(0.06, 0.2, L)) { ai.act = 'up'; ai.air = true; ai.dj = Math.random() < 0.55; } // jump in
@@ -1180,6 +1239,7 @@ function computeFramePose(f) {
       if (f.flipT > 0) p.spin = (1 - f.flipT / 20) * 360; // double-jump front flip
       break;
     case 'block': p.frame = 4; if (f.stun > 0) p.ox = -6; break;
+    case 'duck': p.frame = 4; p.sy = 0.7; p.sx = 1.06; p.lean = -3; if (f.stun > 0) p.ox = -6; break;
     case 'punch': if (f.atk === 'upper') { const A = f.A.upper; // rising uppercut
         if (t <= A.start) { p.frame = 4; p.sy = 0.93; p.ox = -4; }
         else if (t <= A.start + A.active + 6) { p.frame = 2; const e = ease((t - A.start) / 4); p.oy = -34 * e; p.lean = -14 * e; p.sy = 1.06; p.ox = 10; p.aura = t < A.start + A.active ? '#ffe14a' : null; }
@@ -1737,9 +1797,9 @@ function drawTitle() {
     ctx.restore();
   }
 }
-function openTitleMenu() { if (!titleMenu) { titleMenu = true; titleT = 0; SFX.confirm(); say('Twin Bridge City. Street Legends!'); } }
+function openTitleMenu() { if (!titleMenu) { titleMenu = true; titleT = 0; SFX.confirm(); vo(['title']); } }
 
-function goSelect() { scene = 'select'; sel = { cur: [0, 1], locked: [false, false] }; SFX.confirm(); say('Choose your fighter'); }
+function goSelect() { scene = 'select'; sel = { cur: [0, 1], locked: [false, false] }; SFX.confirm(); vo(['choose']); }
 function wrap(s, x, y, maxW, size) {
   ctx.font = `${size}px "Arial", sans-serif`; const words = s.split(' '); let line = '', ly = y;
   ctx.fillStyle = '#ddd'; ctx.textAlign = 'center';
@@ -1748,8 +1808,8 @@ function wrap(s, x, y, maxW, size) {
 }
 function pickTouch(i) {
   if (arc && arc.pending && sel.locked[0]) return;
-  if (!sel.locked[0]) { sel.cur[0] = i; sel.locked[0] = true; SFX.confirm(); say(SAY_NAME[ORDER[i]]); if (arc && arc.pending) { setTimeout(() => beginArcade(ORDER[i]), 900); return; } if (mode === 1) sel.cur[1] = (i + 1) % ORDER.length; else sel.cur[1] = (i + 1) % ORDER.length; }
-  else if (!sel.locked[1]) { sel.cur[1] = i; sel.locked[1] = true; SFX.confirm(); say(SAY_NAME[ORDER[i]]); setTimeout(goStageSelect, 700); }
+  if (!sel.locked[0]) { sel.cur[0] = i; sel.locked[0] = true; SFX.confirm(); vo(['name_' + ORDER[i]]); if (arc && arc.pending) { setTimeout(() => beginArcade(ORDER[i]), 900); return; } if (mode === 1) sel.cur[1] = (i + 1) % ORDER.length; else sel.cur[1] = (i + 1) % ORDER.length; }
+  else if (!sel.locked[1]) { sel.cur[1] = i; sel.locked[1] = true; SFX.confirm(); vo(['name_' + ORDER[i]]); setTimeout(goStageSelect, 700); }
 }
 function onKeyMenu(code) {
   if (scene === 'title' && !titleMenu) { if (['Enter', 'Space', 'KeyF', 'Comma'].includes(code)) openTitleMenu(); return; }
@@ -1791,8 +1851,8 @@ function onKeyMenu(code) {
 function updateFight() {
   if (hitstop > 0) { hitstop--; return; }
   phaseT++;
-  if (phase === 'intro') { if (phaseT === 1) { SFX.gong(); say(round >= 3 ? 'Final round' : 'Round ' + ['one', 'two', 'three'][round - 1]); } if (phaseT === 60) say('Fight!', { stinger: 'stinger', pitch: 0.5, rate: 1.05 }); if (phaseT > 95) { phase = 'fight'; phaseT = 0; } }
-  if (phase === 'fight') { roundTimer--; if (roundTimer <= 0) { roundTimer = 0; const a = P[0].hp / P[0].maxHp, b = P[1].hp / P[1].maxHp; if (a === b) { phase = 'ko'; phaseT = 0; winnerText = 'DRAW'; } else { const w = a > b ? P[0] : P[1]; w.wins++; winnerText = 'TIME! ' + w.c.name + ' WINS'; phase = 'ko'; phaseT = 0; } } }
+  if (phase === 'intro') { if (phaseT === 1) { SFX.gong(); vo([round >= 3 ? 'final_round' : 'round' + round]); } if (phaseT === 60) vo(['fight'], { stinger: 'stinger', pitch: 0.5, rate: 1.05 }); if (phaseT > 95) { phase = 'fight'; phaseT = 0; } }
+  if (phase === 'fight') { roundTimer--; if (roundTimer <= 0) { roundTimer = 0; const a = P[0].hp / P[0].maxHp, b = P[1].hp / P[1].maxHp; if (a === b) { phase = 'ko'; phaseT = 0; winnerText = 'DRAW'; vo(['draw']); } else { const w = a > b ? P[0] : P[1]; w.wins++; winnerText = 'TIME! ' + w.c.name + ' WINS'; phase = 'ko'; phaseT = 0; vo(['time']); } } }
   const ins = [readInput(0), mode === 2 ? readInput(1) : cpuInput(P[1], P[0])];
   const none = { left: false, right: false, up: false, down: false, punch: false, kick: false, special: false };
   if (phase === 'finish' && fin && !fin.w.cpu) { const k = P.indexOf(fin.w), inp = ins[k];
@@ -1809,7 +1869,7 @@ function updateFight() {
     if (phaseT === 70) for (const f of P) if (f.state !== 'ko' && f.hp > 0) f.setState('win');
     if (phaseT > 200) {
       if (P[0].wins >= 2 || P[1].wins >= 2) { scene = 'matchover'; phaseT = 0; const w = P[0].wins >= 2 ? P[0] : P[1];
-        if (arc && w === P[1]) say('Continue?'); else say(SAY_NAME[w.id] + ' wins!'); }
+        if (arc && w === P[1]) vo(['continue']); else vo(['name_' + w.id, 'wins']); }
       else { round++; startRound(); }
     }
   }
@@ -1924,7 +1984,7 @@ function drawFight() {
   drawFinOverlay();
   if (phase === 'intro' && round === 1) { ctx.save(); ctx.globalAlpha = Math.min(1, phaseT / 15); ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.beginPath(); ctx.roundRect(W / 2 - 380, H - 128, 760, 92, 14); ctx.fill();
     txt('▲ JUMP  •  ▲ AGAIN IN THE AIR = DOUBLE JUMP  •  JUMP OVER TO SWITCH SIDES', W / 2, H - 100, 19, '#fff', 'center', 4);
-    txt('▼+PUNCH UPPERCUT  •  ▶+KICK DASH KICK  •  KICK IN AIR = JUMP KICK', W / 2, H - 74, 19, '#7ff6ff', 'center', 4);
+    txt('▼ DUCK (PUNCHES MISS)  •  ▼+PUNCH UPPERCUT  •  HOLD ◀ AWAY = BLOCK  •  ▶+KICK DASH KICK', W / 2, H - 74, 19, '#7ff6ff', 'center', 4);
     { const st = styleOf(P[0]); txt(`YOUR COMBO: ${st.combo.split(' ').map(x => x === 'P' ? 'PUNCH' : 'KICK').join(', ')}  •  HOLD PUNCH = ${st.power.name}`, W / 2, H - 48, 19, '#ffcf2e', 'center', 4); } ctx.restore(); }
   if (phase === 'intro') { if (phaseT < 60) txt('ROUND ' + round, W / 2, H / 2 - 60, 100, '#ffcf2e', 'center', 10); else { const s = 1 + (phaseT - 60) / 40; ctx.save(); ctx.translate(W / 2, H / 2 - 60); ctx.scale(s, s); txt('FIGHT!', 0, 0, 110, '#ff3b2e', 'center', 10); ctx.restore(); } }
   if (phase === 'ko' && scene === 'fight') { if (phaseT < 80) { const s = phaseT < 10 ? 3 - phaseT * 0.2 : 1; ctx.save(); ctx.translate(W / 2, H / 2 - 70); ctx.scale(s, s); txt(fin && fin.done ? 'LEGENDARY!' : winnerText.startsWith('TIME') ? 'TIME!' : winnerText === 'DRAW' ? 'DRAW' : 'K.O.', 0, 0, fin && fin.done ? 110 : 150, '#ff3b2e', 'center', 12); ctx.restore(); } else txt(winnerText, W / 2, H / 2 - 70, 70, '#ffcf2e', 'center', 8); }
@@ -1976,7 +2036,7 @@ function beginArcade(me) {
 function goLadder() {
   scene = 'ladder'; phaseT = 0; arc.final = arc.idx === arc.ladder.length - 1;
   const opp = arc.ladder[arc.idx];
-  say(arc.final ? 'Final battle. ' + SAY_NAME[opp] : 'Next challenger. ' + SAY_NAME[opp]);
+  vo([arc.final ? 'final_battle' : 'next_challenger', 'name_' + opp]);
 }
 function arcadeFight() {
   const opp = arc.ladder[arc.idx];
@@ -1989,7 +2049,7 @@ function arcadeFight() {
 }
 function arcadeNext() {
   arc.idx++;
-  if (arc.idx >= arc.ladder.length) { scene = 'ending'; phaseT = 0; SAVE.champs[arc.me] = true; saveGame(); say('Congratulations. The city is yours.'); }
+  if (arc.idx >= arc.ladder.length) { scene = 'ending'; phaseT = 0; SAVE.champs[arc.me] = true; saveGame(); vo(['champion']); }
   else goLadder();
 }
 function arcadeContinue() { arc.cont++; arcadeFight(); }
@@ -2135,11 +2195,12 @@ function updatePower(f, opp) {
     let pt = null;
     if (pw.quake) { if (t === A.start + 1) { shake = Math.max(shake, 22); SFX.heavy(); for (let i = -1; i <= 1; i += 2) for (let k = 0; k < 8; k++) particles.push({ kind: 'puff', x: f.x + f.dir * 60 + i * k * 30, y: GROUND - 10, vx: i * rand(1, 4), vy: rand(-2, -0.5), r: rand(18, 30), life: 50, max: 60, c: '#9a8a6a' }); particles.push({ kind: 'ring', x: f.x + f.dir * 80, y: GROUND - 10, life: 16, max: 16, color: '#ff3b2e' }); }
       if (opp.onGround() && Math.abs(opp.x - (f.x + f.dir * 80)) < 280) pt = { x: opp.x, y: opp.y - 60 }; }
+    else if (opp.state === 'duck' && pw.frame !== 3) { /* ducked under the power punch */ }
     else { pt = limbHits(f, pw.frame === 3 ? 'leg' : 'front', 42, opp); if (!pt && f.fr) { const h = f.handPoint(); for (const q of [{ x: h.x + f.dir * (pw.reach || 20), y: h.y }, { x: h.x, y: h.y + 50 }]) if (circleHits(q, 40, opp)) { pt = q; break; } } }
     if (pt) {
       f.hasHit = true;
       const last = !pw.hits || t >= hitAt[2];
-      const wasBlocking = opp.state === 'block';
+      const wasBlocking = opp.state === 'block' || opp.state === 'duck';
       applyHit(f, opp, (pw.hits ? 7 : A.dmg) * f.c.power * st.p, { stun: last ? A.stun : 14, kb: last ? A.kb : 2, launch: last ? (pw.launch || 0) : 0, heavy: last, unblockable: true, meter: 0, at: pt, color: pw.color });
       if (wasBlocking && opp.state === 'hit') { popText('GUARD BREAK!', opp.x, opp.y - opp.height - 40, '#ff5050', 36, 60); opp.dizzy = 40; opp.dizzyChar = '*'; opp.dizzyCol = '#ff5050'; }
       styleHitFx(f, pt, true); particles.push({ kind: 'ring', x: pt.x, y: pt.y, life: 14, max: 14, color: pw.color });
@@ -2167,20 +2228,21 @@ function startFinishPhase(loser, winner) {
   phase = 'finish'; phaseT = 0; projectiles = []; finFx = [];
   loser.hp = 0; loser.blind = 0; loser.laugh = 0; loser.setState('dazed'); loser.vx = winner.dir * 5; loser.dizzy = 9999; loser.dizzyChar = '*'; loser.dizzyCol = '#ffe84a';
   hitstop = 12; flashT = 8; shake = 14; SFX.heavy(); camKick = 60; camFocus = loser;
-  setTimeout(() => say("Finish 'em!", { pitch: 0.55, rate: 0.95 }), 250);
+  setTimeout(() => vo(['finish_em'], { pitch: 0.55, rate: 0.95 }), 250);
 }
 function startFinisher() {
   const w = fin.w, l = fin.l; phase = 'finisher'; phaseT = 0; fin.t = 0; fin.type = styleOf(w).fin;
   w.setState('finisher'); w.vx = 0; w.meter = 0; w.finPose = { frame: 0 }; w.dir = l.x > w.x ? 1 : -1;
   l.setState('held'); l.finPose = { frame: 5 }; l.vx = 0; l.dizzy = 9999;
   texts = []; SFX.special(); flashT = 6; camFocus = l; slowmo = 0;
+  vo(['fin_' + w.id], { clipOnly: !CUSTOM['vo_fin_' + w.id] && false });
 }
 function endFinisher(vx, vy) {
   const w = fin.w, l = fin.l; fin.done = true; l.dizzy = 0;
   doKO(l, w); l.vx = vx; l.vy = vy; if (vy < 0) l.y -= 1;
   w.setState('idle'); slowmo = 30; camKick = 60; flashT = 10;
   winnerText = w.c.name + ' WINS';
-  say('Legendary!', { queue: true, pitch: 0.6 });
+  vo(['legendary'], { queue: true, pitch: 0.6 });
   if (arc && w === P[0]) arc.finishers = (arc.finishers || 0) + 1;
 }
 function updateFinishPhase() { // the 4-second window
@@ -2394,7 +2456,7 @@ function step() {
   if (scene === 'fight' && slowmo > 0) { slowmo--; skip = slowmo % 3 !== 0; }
   if (scene === 'fight' && !skip) updateFight();
   if (scene === 'matchover') { for (const f of P) computePose(f); phaseT++;
-    if (arc && !arc.pending && P[1].wins >= 2 && phaseT > 40 + 600) { scene = 'gameover'; phaseT = 0; say('Game over'); } }
+    if (arc && !arc.pending && P[1].wins >= 2 && phaseT > 40 + 600) { scene = 'gameover'; phaseT = 0; vo(['game_over']); } }
   if (scene === 'ladder' || scene === 'ending') phaseT++;
   if (scene === 'gameover' && ++phaseT > 240) quitToTitle();
   playMusic(wantTrack());
