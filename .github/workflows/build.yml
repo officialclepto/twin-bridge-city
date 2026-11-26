@@ -2,6 +2,7 @@ name: Build Android + iPhone apps
 
 on:
   push:
+    paths-ignore: ['.github/workflows/web.yml', '*.txt']
   workflow_dispatch:
 
 permissions:
