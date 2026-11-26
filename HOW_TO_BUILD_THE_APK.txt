@@ -1,0 +1,54 @@
+TWIN BRIDGE CITY: STREET LEGENDS — HOW TO GET THE ANDROID APK
+=============================================================
+
+This folder is a complete Android app. Pick ONE of the two ways below.
+
+
+OPTION A — GitHub builds it for you (free, nothing big to install)
+-----------------------------------------------------------------
+1. Make a free account at github.com (skip if you have one).
+2. Install "GitHub Desktop" from desktop.github.com and sign in.
+3. In GitHub Desktop: File > Add local repository > choose THIS folder
+   (the one with HOW_TO_BUILD_THE_APK.txt in it).
+   It will say "this is not a git repository" > click "create a repository" > Create.
+4. Click "Publish repository" (top bar). Keep "Keep this code private" checked. Publish.
+5. Go to github.com > your new repository > the "Actions" tab.
+   A job called "Build Android APK" starts by itself. Wait about 5–10 minutes
+   for the green check mark.
+6. Click the finished run > scroll to "Artifacts" > download "TwinBridgeCity-APK".
+   Unzip it: inside is app-debug.apk.
+7. Put app-debug.apk on your Android phone (email it, Google Drive, USB cable).
+   Tap it. If Android asks, allow "Install unknown apps" for that app. Install.
+
+Every time you change the game and click "Push origin" in GitHub Desktop,
+a fresh APK gets built automatically.
+
+
+OPTION B — Android Studio on your computer
+------------------------------------------
+1. Install Android Studio (free) from developer.android.com/studio.
+2. Open Android Studio > Open > choose the "android" folder inside this folder.
+3. Wait for it to finish "syncing" (first time downloads tools; can take a while).
+4. Menu: Build > Build App Bundle(s) / APK(s) > Build APK(s).
+5. When it says "APK(s) generated", click "locate".
+   That folder has app-debug.apk. Install it on your phone like step 7 above.
+
+
+UPDATING THE GAME LATER
+-----------------------
+The game files live in:  android/app/src/main/assets/
+Replace index.html and the assets folder there with the new versions,
+then build again (push in GitHub Desktop, or Build APK in Android Studio).
+Bump versionCode and versionName in android/app/build.gradle for each new release.
+
+
+ABOUT THIS APK
+--------------
+- This is a "debug" APK: perfect for installing on your phones and sharing
+  with friends for testing. The Google Play Store needs a signed "release"
+  build (.aab) instead — that's a separate step when you're ready to publish.
+- App name on the phone: Twin Bridge City.  Package: com.twinbridgecity.streetlegends
+- Runs fully offline, landscape, full screen, screen stays on while playing.
+- The announcer uses the phone's built-in voice (Settings > Text-to-speech on the phone).
+- Phone back button steps back through the menus; on the title screen it exits.
+- play_store_icon_512.png is ready for the Play Store listing later.
