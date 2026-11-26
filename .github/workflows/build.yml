@@ -36,7 +36,8 @@ jobs:
           path: TwinBridgeCity.apk
 
   ios:
-    runs-on: macos-15
+    runs-on: macos-latest
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@v5
       - name: Generate the Xcode project
@@ -64,7 +65,8 @@ jobs:
 
   release:
     needs: [android, ios]
-    if: github.ref == 'refs/heads/main'
+    # Publish even if Apple's build machines are busy: the APK goes out, the IPA joins when it's ready.
+    if: always() && github.ref == 'refs/heads/main' && needs.android.result == 'success'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -79,7 +81,8 @@ jobs:
         run: |
           VER=$(grep -o "versionName '[^']*'" android/app/build.gradle | cut -d"'" -f2)
           TAG="v$VER-build${{ github.run_number }}"
-          gh release create "$TAG" TwinBridgeCity.apk TwinBridgeCity.ipa --target "${{ github.sha }}" --latest \
+          FILES="TwinBridgeCity.apk"; [ -f TwinBridgeCity.ipa ] && FILES="$FILES TwinBridgeCity.ipa"
+          gh release create "$TAG" $FILES --target "${{ github.sha }}" --latest \
             --title "Twin Bridge City: Street Legends $VER (build ${{ github.run_number }})" \
             --notes "ANDROID: download TwinBridgeCity.apk on your phone and open it to install.
           IPHONE: download TwinBridgeCity.ipa on a computer and install it with Sideloadly (free Apple ID; re-install every 7 days)."
