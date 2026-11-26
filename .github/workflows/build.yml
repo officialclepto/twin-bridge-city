@@ -52,8 +52,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           VER=$(grep -o "versionName '[^']*'" android/app/build.gradle | cut -d"'" -f2)
-          TAG="v$VER-build${{ github.run_number }}"
+          TAG="v$VER-$(date -u +%Y%m%d-%H%M)"
           gh release create "$TAG" TwinBridgeCity.apk --target "${{ github.sha }}" --latest \
-            --title "Twin Bridge City: Street Legends $VER (build ${{ github.run_number }})" \
+            --title "Twin Bridge City: Street Legends $VER ($(date -u +%b\ %d\ %H:%M) UTC)" \
             --notes "ANDROID: download TwinBridgeCity.apk on your phone and open it to install.
           IPHONE: download TwinBridgeCity.ipa on a computer and install it with Sideloadly (free Apple ID; re-install every 7 days)."
