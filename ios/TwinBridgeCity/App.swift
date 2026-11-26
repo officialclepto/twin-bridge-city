@@ -31,7 +31,7 @@ final class GameViewController: UIViewController {
 
     override func loadView() {
         let cfg = WKWebViewConfiguration()
-        let root = Bundle.main.resourceURL!.appendingPathComponent("game")
+        let root = Bundle.main.resourceURL!.appendingPathComponent("assets") // the game folder, bundled from android/app/src/main/assets
         cfg.setURLSchemeHandler(GameFiles(root: root), forURLScheme: "app")
         cfg.allowsInlineMediaPlayback = true
         cfg.mediaTypesRequiringUserActionForPlayback = []

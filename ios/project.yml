@@ -6,6 +6,7 @@ options:
 settings:
   base:
     MARKETING_VERSION: "1.3"
+    # keep in step with android versionName
     CURRENT_PROJECT_VERSION: "1"
 targets:
   TwinBridgeCity:
@@ -15,7 +16,6 @@ targets:
       - path: TwinBridgeCity
       # the game itself, shared with the Android app
       - path: ../android/app/src/main/assets
-        name: game
         type: folder
         buildPhase: resources
     settings:
