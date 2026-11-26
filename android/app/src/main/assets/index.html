@@ -31,7 +31,7 @@
 <div id="rotate">TURN YOUR PHONE SIDEWAYS ⟲</div>
 <div id="pad">
   <div class="b dir" data-k="left">◀</div><div class="b dir" data-k="right">▶</div>
-  <div class="b dir" data-k="up">▲</div><div class="b dir" data-k="down">DUCK</div>
+  <div class="b dir" data-k="up">▲</div><div class="b dir" data-k="down">BLOCK</div>
   <div class="b atk" data-k="punch">PUNCH</div><div class="b atk" data-k="kick">KICK</div>
   <div class="b atk" data-k="special">SPECIAL</div>
 </div>
@@ -737,9 +737,7 @@ function updateFighter(f, opp, inp) {
       } else { const h = inp.left ? -1 : inp.right ? 1 : 0; if (h) f.vx = clamp(f.vx + h * 0.35, -spd * 1.6, spd * 1.6); } // air steering
     }
     else if (f.onGround()) {
-      const away = (inp.left && f.dir > 0) || (inp.right && f.dir < 0);
-      if (inp.down) { if (f.state !== 'duck') f.setState('duck'); f.vx = 0; }
-      else if (away && f.blind <= 0 && threatened(f, opp)) { if (f.state !== 'block') f.setState('block'); f.vx = 0; }
+      if (inp.down && f.blind <= 0) { if (f.state !== 'block') f.setState('block'); f.vx = 0; } // ducking is switched off for now: down = block
       else if (pressed('up') || (inp.up && f.state !== 'jump' && f.land <= 0 && f.t > 6)) { f.vy = -21; f.y -= 1; f.jumps = 1; f.vx = (inp.left ? -1 : inp.right ? 1 : 0) * spd * 1.45; f.setState('jump'); puff(f.x, f.y, 3, 18, 0); }
       else if (inp.left || inp.right) { f.vx = (inp.right ? 1 : -1) * spd * ((inp.right ? 1 : -1) === f.dir ? 1 : 0.8); if (f.state !== 'walk') f.setState('walk'); }
       else { f.vx *= 0.5; if (f.state !== 'idle') f.setState('idle'); }
@@ -771,8 +769,7 @@ function updateFighter(f, opp, inp) {
     if (--f.stun <= 0 && f.onGround()) { f.setState('idle'); f.comboN = 0; }
   } else if (f.state === 'block') {
     if (f.stun > 0) { f.stun--; f.vx *= 0.8; }
-    const away = (inp.left && f.dir > 0) || (inp.right && f.dir < 0);
-    if ((!away || !threatened(f, opp)) && f.stun <= 0 && f.t > 8) f.setState('idle');
+    if (!inp.down && f.stun <= 0) f.setState('idle');
   } else if (f.state === 'duck') {
     if (f.stun > 0) { f.stun--; f.vx *= 0.8; }
     if (!inp.down && f.stun <= 0) f.setState('idle');
@@ -1074,7 +1071,7 @@ function cpuInput(f, opp) {
     const spRange = { smash: 230, axe: 200, smoke: 900, steal: 260, teleport: 900, combo: 210, cash: 900, umbrella: 900, lid: 240, moneybag: 230, alien: 900, petals: 900, grenade: 650, dbluppercut: 230, laugh: 900, fireball: 900 }[sp];
     if (ready && dist < spRange && Math.random() < lerp(0.25, 0.85, L)) ai.act = 'special';
     else if (dist < 240 && !oppAttacking && edge('punch') && Math.random() < lerp(0.04, 0.13, L)) { ai.hold = 34 + f.A.punch.start + f.A.punch.active + f.A.punch.rec; ai.t = 2; inp.punch = true; return inp; }
-    else if (oppAttacking && dist < 230 && Math.random() < lerp(0.2, 0.8, L)) { ai.act = opp.state === 'punch' && opp.onGround() && opp.atk === 'punch' && Math.random() < 0.6 ? 'down' : away; ai.t = 18; }
+    else if (oppAttacking && dist < 230 && Math.random() < lerp(0.2, 0.8, L)) { ai.act = 'down'; ai.t = 18; }
     else if (dist < 150) ai.act = Math.random() < lerp(0.3, 0.6, L) ? 'punch' : Math.random() < 0.7 ? 'kick' : away;
     else if (dist < 220) ai.act = Math.random() < 0.3 ? 'lunge' : Math.random() < 0.4 ? 'kick' : toward;
     else if (dist < 430 && Math.random() < lerp(0.06, 0.2, L)) { ai.act = 'up'; ai.air = true; ai.dj = Math.random() < 0.55; } // jump in
@@ -1984,7 +1981,7 @@ function drawFight() {
   drawFinOverlay();
   if (phase === 'intro' && round === 1) { ctx.save(); ctx.globalAlpha = Math.min(1, phaseT / 15); ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.beginPath(); ctx.roundRect(W / 2 - 380, H - 128, 760, 92, 14); ctx.fill();
     txt('▲ JUMP  •  ▲ AGAIN IN THE AIR = DOUBLE JUMP  •  JUMP OVER TO SWITCH SIDES', W / 2, H - 100, 19, '#fff', 'center', 4);
-    txt('▼ DUCK (PUNCHES MISS)  •  ▼+PUNCH UPPERCUT  •  HOLD ◀ AWAY = BLOCK  •  ▶+KICK DASH KICK', W / 2, H - 74, 19, '#7ff6ff', 'center', 4);
+    txt('BLOCK+PUNCH UPPERCUT  •  ▶+KICK DASH KICK  •  KICK IN AIR = JUMP KICK', W / 2, H - 74, 19, '#7ff6ff', 'center', 4);
     { const st = styleOf(P[0]); txt(`YOUR COMBO: ${st.combo.split(' ').map(x => x === 'P' ? 'PUNCH' : 'KICK').join(', ')}  •  HOLD PUNCH = ${st.power.name}`, W / 2, H - 48, 19, '#ffcf2e', 'center', 4); } ctx.restore(); }
   if (phase === 'intro') { if (phaseT < 60) txt('ROUND ' + round, W / 2, H / 2 - 60, 100, '#ffcf2e', 'center', 10); else { const s = 1 + (phaseT - 60) / 40; ctx.save(); ctx.translate(W / 2, H / 2 - 60); ctx.scale(s, s); txt('FIGHT!', 0, 0, 110, '#ff3b2e', 'center', 10); ctx.restore(); } }
   if (phase === 'ko' && scene === 'fight') { if (phaseT < 80) { const s = phaseT < 10 ? 3 - phaseT * 0.2 : 1; ctx.save(); ctx.translate(W / 2, H / 2 - 70); ctx.scale(s, s); txt(fin && fin.done ? 'LEGENDARY!' : winnerText.startsWith('TIME') ? 'TIME!' : winnerText === 'DRAW' ? 'DRAW' : 'K.O.', 0, 0, fin && fin.done ? 110 : 150, '#ff3b2e', 'center', 12); ctx.restore(); } else txt(winnerText, W / 2, H / 2 - 70, 70, '#ffcf2e', 'center', 8); }
