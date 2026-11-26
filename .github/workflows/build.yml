@@ -1,4 +1,4 @@
-name: Build Android + iPhone apps
+name: Build Android app
 
 on:
   push:
@@ -36,44 +36,15 @@ jobs:
           name: android
           path: TwinBridgeCity.apk
 
-  ios:
-    runs-on: macos-latest
-    timeout-minutes: 40
-    steps:
-      - uses: actions/checkout@v5
-      - name: Generate the Xcode project
-        working-directory: ios
-        run: |
-          brew install xcodegen
-          xcodegen generate
-      # Unsigned build: Sideloadly / AltStore sign it with your Apple ID when you install it.
-      - name: Build the iPhone app
-        working-directory: ios
-        run: |
-          xcodebuild -project TwinBridgeCity.xcodeproj -scheme TwinBridgeCity -configuration Release \
-            -sdk iphoneos -destination 'generic/platform=iOS' -derivedDataPath build \
-            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" build
-      - name: Package the IPA
-        run: |
-          APP=$(find ios/build/Build/Products/Release-iphoneos -maxdepth 1 -name "*.app" | head -1)
-          mkdir -p Payload && cp -R "$APP" Payload/
-          zip -qry TwinBridgeCity.ipa Payload
-          ls -la TwinBridgeCity.ipa
-      - uses: actions/upload-artifact@v4
-        with:
-          name: ios
-          path: TwinBridgeCity.ipa
-
   release:
-    needs: [android, ios]
-    # Publish even if Apple's build machines are busy: the APK goes out, the IPA joins when it's ready.
-    if: always() && github.ref == 'refs/heads/main' && needs.android.result == 'success'
+    needs: [android]
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
       - uses: actions/download-artifact@v4
         with:
-          merge-multiple: true
+          name: android
       # The newest builds always end up at
       # https://github.com/<owner>/<repo>/releases/latest
       - name: Publish to Releases
@@ -82,8 +53,7 @@ jobs:
         run: |
           VER=$(grep -o "versionName '[^']*'" android/app/build.gradle | cut -d"'" -f2)
           TAG="v$VER-build${{ github.run_number }}"
-          FILES="TwinBridgeCity.apk"; [ -f TwinBridgeCity.ipa ] && FILES="$FILES TwinBridgeCity.ipa"
-          gh release create "$TAG" $FILES --target "${{ github.sha }}" --latest \
+          gh release create "$TAG" TwinBridgeCity.apk --target "${{ github.sha }}" --latest \
             --title "Twin Bridge City: Street Legends $VER (build ${{ github.run_number }})" \
             --notes "ANDROID: download TwinBridgeCity.apk on your phone and open it to install.
           IPHONE: download TwinBridgeCity.ipa on a computer and install it with Sideloadly (free Apple ID; re-install every 7 days)."
