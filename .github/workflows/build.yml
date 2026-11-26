@@ -1,0 +1,85 @@
+name: Build Android + iPhone apps
+
+on:
+  push:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  android:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+      # GitHub's Ubuntu machines already have the Android SDK; make sure the
+      # pieces this app needs are there and the licenses are accepted.
+      - name: Prepare Android SDK
+        run: |
+          SDKM=$(ls -d "$ANDROID_HOME"/cmdline-tools/*/bin | sort -V | tail -1)/sdkmanager
+          yes | "$SDKM" --licenses > /dev/null || true
+          "$SDKM" "platforms;android-35" "build-tools;35.0.0" "platform-tools"
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Build the APK
+        working-directory: android
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug --no-daemon --stacktrace
+      - run: cp android/app/build/outputs/apk/debug/app-debug.apk TwinBridgeCity.apk
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android
+          path: TwinBridgeCity.apk
+
+  ios:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v5
+      - name: Generate the Xcode project
+        working-directory: ios
+        run: |
+          brew install xcodegen
+          xcodegen generate
+      # Unsigned build: Sideloadly / AltStore sign it with your Apple ID when you install it.
+      - name: Build the iPhone app
+        working-directory: ios
+        run: |
+          xcodebuild -project TwinBridgeCity.xcodeproj -scheme TwinBridgeCity -configuration Release \
+            -sdk iphoneos -destination 'generic/platform=iOS' -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" build
+      - name: Package the IPA
+        run: |
+          APP=$(find ios/build/Build/Products/Release-iphoneos -maxdepth 1 -name "*.app" | head -1)
+          mkdir -p Payload && cp -R "$APP" Payload/
+          zip -qry TwinBridgeCity.ipa Payload
+          ls -la TwinBridgeCity.ipa
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ios
+          path: TwinBridgeCity.ipa
+
+  release:
+    needs: [android, ios]
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/download-artifact@v4
+        with:
+          merge-multiple: true
+      # The newest builds always end up at
+      # https://github.com/<owner>/<repo>/releases/latest
+      - name: Publish to Releases
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VER=$(grep -o "versionName '[^']*'" android/app/build.gradle | cut -d"'" -f2)
+          TAG="v$VER-build${{ github.run_number }}"
+          gh release create "$TAG" TwinBridgeCity.apk TwinBridgeCity.ipa --target "${{ github.sha }}" --latest \
+            --title "Twin Bridge City: Street Legends $VER (build ${{ github.run_number }})" \
+            --notes "ANDROID: download TwinBridgeCity.apk on your phone and open it to install.
+          IPHONE: download TwinBridgeCity.ipa on a computer and install it with Sideloadly (free Apple ID; re-install every 7 days)."

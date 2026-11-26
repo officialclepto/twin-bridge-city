@@ -1,0 +1,23 @@
+TWIN BRIDGE CITY - ON IPHONE / IPAD
+
+OPTION 1 - PLAY IN SAFARI (free, easiest, great for sharing)
+  1. Open the web link in Safari:  https://officialclepto.github.io/twin-bridge-city/
+  2. Tap the Share button, then "Add to Home Screen", then Add.
+  3. Open it from the home screen icon. It runs full screen, turn the phone sideways.
+
+OPTION 2 - INSTALL THE IPHONE APP (free Apple ID, needs a computer + USB cable)
+  1. On a Windows or Mac computer, download TwinBridgeCity.ipa from
+     https://github.com/officialclepto/twin-bridge-city/releases/latest
+  2. Install Sideloadly from https://sideloadly.io
+     (Windows: also install iTunes and iCloud from Apple's website, NOT the Microsoft Store versions.)
+  3. Plug in the iPhone, tap "Trust This Computer" on the phone.
+  4. Open Sideloadly, drag TwinBridgeCity.ipa into it, type your Apple ID email, press Start.
+     Enter your Apple ID password / 2-factor code if it asks. (Using a spare Apple ID is fine.)
+  5. On the iPhone: Settings > General > VPN & Device Management > tap your Apple ID > Trust.
+     On iOS 16 or newer also turn on Settings > Privacy & Security > Developer Mode (the phone restarts).
+  6. Open Twin Bridge City.
+  Limits of a free Apple ID: the app stops opening after 7 days. Just repeat step 4 (don't delete the app first,
+  so your saves stay). Max 3 sideloaded apps at once.
+
+OPTION 3 - TESTFLIGHT (best for sharing the real app, $99/year Apple Developer account)
+  Up to 10,000 people install it with a link through Apple's TestFlight app. Ask Claude to set it up once you have the account.

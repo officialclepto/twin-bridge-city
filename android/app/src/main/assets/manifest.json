@@ -1,0 +1,2 @@
+{ "name": "Twin Bridge City: Street Legends", "short_name": "Twin Bridge City", "start_url": "./index.html", "display": "fullscreen", "orientation": "landscape",
+  "background_color": "#000000", "theme_color": "#040a22", "icons": [ { "src": "assets/icon180.png", "sizes": "180x180", "type": "image/png" }, { "src": "assets/icon512.png", "sizes": "512x512", "type": "image/png" } ] }

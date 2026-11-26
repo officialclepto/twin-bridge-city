@@ -1,0 +1,31 @@
+name: TwinBridgeCity
+options:
+  bundleIdPrefix: com.twinbridgecity
+  deploymentTarget:
+    iOS: "15.0"
+settings:
+  base:
+    MARKETING_VERSION: "1.3"
+    CURRENT_PROJECT_VERSION: "1"
+targets:
+  TwinBridgeCity:
+    type: application
+    platform: iOS
+    sources:
+      - path: TwinBridgeCity
+      # the game itself, shared with the Android app
+      - path: ../android/app/src/main/assets
+        name: game
+        type: folder
+        buildPhase: resources
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.twinbridgecity.streetlegends
+        PRODUCT_NAME: TwinBridgeCity
+        INFOPLIST_FILE: TwinBridgeCity/Info.plist
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        TARGETED_DEVICE_FAMILY: "1,2"
+        SWIFT_VERSION: "5.0"
+        CODE_SIGNING_ALLOWED: "NO"
+        CODE_SIGN_IDENTITY: ""
+        GENERATE_INFOPLIST_FILE: "NO"
